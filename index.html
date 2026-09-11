@@ -391,7 +391,11 @@ async function connect(){
       log('Connected — receiving live status');
     }catch(notifyErr){
       notifyAvailable = false;
-      log('Notifications unavailable (' + notifyErr.name + ') — send-only mode. Bypass commands still work.');
+      if (notifyErr.name === 'NotSupportedError' || notifyErr.name === 'SecurityError'){
+        log('⚠️ Live status blocked (' + notifyErr.name + '). The micro:bit is almost certainly requiring a paired connection. In MakeCode: gear icon → Project Settings → turn ON "No Pairing Required", then reflash. Bypass commands will probably fail too until you do.');
+      } else {
+        log('Live status unavailable (' + notifyErr.name + ') — send-only mode.');
+      }
     }
 
     linkText.textContent = notifyAvailable ? 'Connected' : 'Connected (send-only)';
@@ -425,6 +429,7 @@ function onDisconnected(){
   setStatus(null, 'Not connected', 'Connect to your micro:bit to start monitoring.');
   setDoor(null);
   clearInterval(countdownTimer);
+  stopPhoneAlert();
   bypassEndsAt = null;
   log('Disconnected');
 }
@@ -477,21 +482,48 @@ async function ensureNotificationPermission(){
   if (Notification.permission === 'denied') return false;
   try{ return (await Notification.requestPermission()) === 'granted'; }catch(e){ return false; }
 }
-function showAlarmNotification(){
-  if ('Notification' in window && Notification.permission === 'granted'){
-    try{
-      new Notification(zoneName.value + ' opened', {
-        body: 'The ' + zoneName.value.toLowerCase() + ' has been opened.',
-        icon: 'icon-192.png',
-        tag: 'door-alarm'
-      });
-    }catch(e){}
+async function showAlarmNotification(){
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const title = zoneName.value + ' opened';
+  const opts = {
+    body: 'The ' + zoneName.value.toLowerCase() + ' has been opened.',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: 'door-alarm',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200]
+  };
+  // Android Chrome does NOT support `new Notification()` — it throws, and
+  // notifications must go through the service worker registration instead.
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg && reg.showNotification){
+      await reg.showNotification(title, opts);
+      return;
+    }
+  }catch(e){}
+  try{ new Notification(title, opts); }catch(e){
+    log('Could not show a notification: ' + e.name);
   }
 }
+
+// Keep nagging until the door closes or the alarm is cleared — a single
+// beep is easy to sleep through.
+let alarmPulse = null;
 function triggerPhoneAlert(){
-  playAlarmBeep();
-  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
   showAlarmNotification();
+  const pulse = () => {
+    playAlarmBeep();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  };
+  pulse();
+  clearInterval(alarmPulse);
+  alarmPulse = setInterval(pulse, 2500);
+}
+function stopPhoneAlert(){
+  clearInterval(alarmPulse);
+  alarmPulse = null;
 }
 
 /* ---------- Protocol ---------- */
@@ -515,6 +547,13 @@ function handleLine(line){
     clearInterval(countdownTimer);
     bypassEndsAt = null;
     cancelBtn.disabled = true;
+    stopPhoneAlert();
+  } else if (line === 'SETUP'){
+    setStatus(null, 'Setup needed', 'The sensor isn\'t calibrated yet. With the door closed and the magnet in place, press <strong>button A</strong> on the micro:bit.');
+    setDoor(null);
+    clearInterval(countdownTimer);
+    bypassEndsAt = null;
+    cancelBtn.disabled = true;
   } else if (line === 'DOOR_OPEN'){
     setDoor('open');
   } else if (line === 'DOOR_CLOSED'){
@@ -528,6 +567,7 @@ function handleLine(line){
 
 function startCountdown(totalSecs){
   clearInterval(countdownTimer);
+  stopPhoneAlert();
   bypassEndsAt = Date.now() + totalSecs * 1000;
   cancelBtn.disabled = false;
   tickCountdown();
