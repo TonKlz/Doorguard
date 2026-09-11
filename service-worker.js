@@ -1,4 +1,4 @@
-const CACHE_NAME = 'door-guard-v3';
+const CACHE_NAME = 'door-guard-v4';
 const FILES_TO_CACHE = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {

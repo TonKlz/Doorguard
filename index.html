@@ -196,6 +196,13 @@
   .log-entry{ display:flex; gap:7px; }
   .log-time{ color:var(--muted-2); flex:none; font-variant-numeric:tabular-nums; }
 
+  .diag-btn{
+    width:100%; margin-top:10px; padding:10px; border-radius:10px;
+    background:var(--chip); border:1px solid var(--card-edge);
+    color:var(--muted); font-size:12.5px; font-weight:600;
+  }
+  .diag-btn:active{ transform:scale(0.99); }
+
   .footnote{ text-align:center; font-size:11.5px; color:var(--muted-2); margin-top:14px; line-height:1.6; }
 </style>
 </head>
@@ -249,6 +256,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <div class="log" id="log"></div>
+    <button class="diag-btn" id="diagBtn">Run Bluetooth diagnostics</button>
   </div>
 
   <div class="footnote">Requires a micro:bit V2 running the door/window guard firmware.<br>Use Chrome or Edge (Android/desktop), or Bluefy on iOS.</div>
@@ -282,6 +290,7 @@ const customBtn = document.getElementById('customBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const zoneName = document.getElementById('zoneName');
 const editZoneBtn = document.getElementById('editZoneBtn');
+const diagBtn = document.getElementById('diagBtn');
 
 /* ---------- Icons ---------- */
 const ICONS = {
@@ -658,6 +667,104 @@ cancelBtn.addEventListener('click', async () => {
     log('Cancel request did not reach the micro:bit');
   }
 });
+
+/* ---------- Diagnostics ----------
+   Dumps what the micro:bit is ACTUALLY exposing, rather than what we
+   assume it exposes. Answers: does the UART service exist, do the
+   characteristics exist, and do they really support notify/write. */
+const KNOWN_SERVICES = [
+  UART_SERVICE,
+  'e95d0753-251d-470a-a062-fa1922dfa9a8', // accelerometer
+  'e95d9882-251d-470a-a062-fa1922dfa9a8', // buttons
+  'e95dd91d-251d-470a-a062-fa1922dfa9a8', // led
+  'e95d6100-251d-470a-a062-fa1922dfa9a8', // temperature
+  'e95d93af-251d-470a-a062-fa1922dfa9a8', // event
+  '0000180a-0000-1000-8000-00805f9b34fb'  // device information
+];
+
+function propsOf(c){
+  const p = c.properties, f = [];
+  if (p.read) f.push('read');
+  if (p.write) f.push('write');
+  if (p.writeWithoutResponse) f.push('writeNoResp');
+  if (p.notify) f.push('NOTIFY');
+  if (p.indicate) f.push('indicate');
+  return f.length ? f.join(', ') : '(none)';
+}
+
+async function runDiagnostics(){
+  logToggle.classList.add('open');
+  logEl.classList.add('open');
+  log('──────── DIAGNOSTICS ────────');
+  log('Browser: ' + navigator.userAgent);
+
+  if (!navigator.bluetooth){ log('✗ navigator.bluetooth missing'); return; }
+
+  try{
+    let dev = (device && device.gatt && device.gatt.connected) ? device : null;
+    if (dev){
+      log('Reusing the existing connection.');
+    } else {
+      dev = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'BBC micro:bit' }],
+        optionalServices: KNOWN_SERVICES
+      });
+      log('Device: ' + (dev.name || 'unnamed'));
+      await dev.gatt.connect();
+      log('✓ GATT connected');
+      await wait(400);
+    }
+
+    let services = [];
+    try{
+      services = await dev.gatt.getPrimaryServices();
+      log('Services visible: ' + services.length);
+    }catch(e){
+      log('getPrimaryServices failed: ' + e.name + ' — ' + e.message);
+    }
+
+    for (const s of services){
+      log('▸ SERVICE ' + s.uuid);
+      try{
+        const chars = await s.getCharacteristics();
+        for (const c of chars){
+          log('    ' + c.uuid + '  [' + propsOf(c) + ']');
+        }
+      }catch(e){
+        log('    (could not read characteristics: ' + e.name + ')');
+      }
+    }
+
+    // Focused check on the two we actually depend on.
+    try{
+      const svc = await dev.gatt.getPrimaryService(UART_SERVICE);
+      log('✓ UART service present');
+      try{
+        const rx = await svc.getCharacteristic(UART_RX);
+        log('✓ write char 6e400002 [' + propsOf(rx) + ']');
+      }catch(e){ log('✗ write char 6e400002 missing: ' + e.name); }
+      try{
+        const tx = await svc.getCharacteristic(UART_TX);
+        log('✓ notify char 6e400003 [' + propsOf(tx) + ']');
+        try{
+          await tx.startNotifications();
+          log('✓ startNotifications SUCCEEDED');
+          await tx.stopNotifications();
+        }catch(e){
+          log('✗ startNotifications failed: ' + e.name + ' — ' + e.message);
+        }
+      }catch(e){ log('✗ notify char 6e400003 missing: ' + e.name); }
+    }catch(e){
+      log('✗ UART service NOT found: ' + e.name + ' — is the Bluetooth extension added and startUartService() called?');
+    }
+
+    log('──────── END ────────');
+  }catch(err){
+    log('Diagnostics aborted: ' + err.name + ' — ' + err.message);
+  }
+}
+
+diagBtn.addEventListener('click', runDiagnostics);
 
 if (!navigator.bluetooth){
   log('Web Bluetooth is not available in this browser. Use Chrome/Edge, or Bluefy on iOS.');
