@@ -227,7 +227,7 @@
     text-align:center; font-size:10.5px; color:rgba(255,255,255,0.18);
     margin-top:22px; line-height:1.6; letter-spacing:0.3px;
   }
-  #buildTop{ cursor:default; }
+  #subLine{ cursor:default; user-select:none; -webkit-user-select:none; }
 
   /* hidden unless summoned */
   .debug{ display:none; margin-top:16px; }
@@ -272,7 +272,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
         </button>
       </div>
-      <div class="sub">micro:bit sensor · <span id="buildTop"></span></div>
+      <div class="sub" id="subLine">micro:bit magnetic sensor</div>
     </div>
     <div class="pill"><span class="dot" id="linkDot"></span><span id="linkText">Offline</span></div>
   </header>
@@ -377,7 +377,7 @@ const zoneName = document.getElementById('zoneName');
 const editZoneBtn = document.getElementById('editZoneBtn');
 const diagBtn = document.getElementById('diagBtn');
 const debugPanel = document.getElementById('debugPanel');
-const buildTop = document.getElementById('buildTop');
+const subLine = document.getElementById('subLine');
 const pinRow = document.getElementById('pinRow');
 const pinInput = document.getElementById('pinInput');
 const pinSaveBtn = document.getElementById('pinSaveBtn');
@@ -487,8 +487,9 @@ function log(msg){
   logEl.prepend(row);
   while (logEl.children.length > 60) logEl.removeChild(logEl.lastChild);
 }
+// Five quick taps on the subtitle reveals (or hides) the log and diagnostics.
 let buildTaps = 0, buildTapTimer = null;
-buildTop.addEventListener('click', () => {
+subLine.addEventListener('click', () => {
   buildTaps++;
   clearTimeout(buildTapTimer);
   buildTapTimer = setTimeout(() => { buildTaps = 0; }, 1200);
@@ -1016,7 +1017,8 @@ async function runDiagnosticsInner(){
 diagBtn.addEventListener('click', runDiagnostics);
 
 /* ---------- Boot ---------- */
-buildTop.textContent = APP_BUILD;
+// Not shown on screen any more, but still logged so the hidden panel can
+// confirm which version is actually loaded if a cache ever misbehaves.
 log('App ' + APP_BUILD);
 setStatus(null, 'Not connected', 'Connect to your micro:bit to start monitoring.');
 
