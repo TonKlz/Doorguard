@@ -175,7 +175,19 @@
     background:var(--chip); border:1px solid var(--card-edge); color:var(--text);
     font-weight:700; border-radius:12px; padding:0 18px; font-size:13.5px;
   }
-  .pin-row.hidden, .pin-saved.hidden{ display:none; }
+  .pin-row.hidden, .pin-saved.hidden, .pin-error.hidden{ display:none; }
+  .pin-error{
+    display:flex; align-items:center; gap:6px;
+    background:var(--alarm-bg); color:var(--alarm);
+    border-radius:10px; padding:9px 12px; margin-bottom:12px;
+    font-size:12.5px; font-weight:600; line-height:1.4;
+    animation:shake 0.3s ease;
+  }
+  @keyframes shake{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-4px); }
+    75%{ transform:translateX(4px); }
+  }
   .pin-saved{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
     margin-bottom:12px; font-size:12.5px; color:var(--muted);
@@ -260,9 +272,14 @@
       <input type="password" inputmode="numeric" id="pinInput" placeholder="Bypass PIN" maxlength="8" autocomplete="off">
       <button id="pinSaveBtn">Save</button>
     </div>
+    <div class="pin-row" id="pinVerifyRow">
+      <input type="password" inputmode="numeric" id="pinVerifyInput" placeholder="Current PIN" maxlength="8" autocomplete="off">
+      <button id="pinVerifyBtn">Unlock</button>
+    </div>
     <div class="pin-saved" id="pinSaved">
       <span>PIN saved on this phone</span><button id="pinChangeBtn">Change</button>
     </div>
+    <div class="pin-error" id="pinError"></div>
     <div class="chip-row">
       <button class="chip" data-mins="30" disabled><span class="num">30</span><span class="unit">min</span></button>
       <button class="chip" data-mins="60" disabled><span class="num">1</span><span class="unit">hour</span></button>
@@ -292,7 +309,7 @@
 <script>
 // Bump this on every change so the log tells us instantly which build is
 // actually loaded — stale caches have masked real fixes more than once.
-const APP_BUILD = 'build 15';
+const APP_BUILD = 'build 16';
 
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 // Verified by reading the characteristics off a real micro:bit: these are
@@ -333,6 +350,10 @@ const pinInput = document.getElementById('pinInput');
 const pinSaveBtn = document.getElementById('pinSaveBtn');
 const pinSaved = document.getElementById('pinSaved');
 const pinChangeBtn = document.getElementById('pinChangeBtn');
+const pinVerifyRow = document.getElementById('pinVerifyRow');
+const pinVerifyInput = document.getElementById('pinVerifyInput');
+const pinVerifyBtn = document.getElementById('pinVerifyBtn');
+const pinError = document.getElementById('pinError');
 
 /* ---------- Icons ---------- */
 const ICONS = {
@@ -359,28 +380,73 @@ editZoneBtn.addEventListener('click', () => { zoneName.focus(); zoneName.select(
    It's remembered on this phone so you don't retype it every time; the
    point is that someone else's phone doesn't know it. */
 let bypassPin = localStorage.getItem('bypassPin') || '';
+// 'entry'  = no PIN stored, asking for one
+// 'saved'  = PIN stored, showing the Change button
+// 'verify' = changing it, asking for the current one first
+let pinMode = bypassPin ? 'saved' : 'entry';
 
 function renderPinUi(){
-  const have = bypassPin !== '';
-  pinRow.classList.toggle('hidden', have);
-  pinSaved.classList.toggle('hidden', !have);
+  pinRow.classList.toggle('hidden', pinMode !== 'entry');
+  pinVerifyRow.classList.toggle('hidden', pinMode !== 'verify');
+  pinSaved.classList.toggle('hidden', pinMode !== 'saved');
 }
+
+// Errors go on screen, not just into the collapsed activity log.
+function showPinError(msg){
+  pinError.textContent = '⚠️ ' + msg;
+  pinError.classList.remove('hidden');
+  pinError.style.animation = 'none';
+  void pinError.offsetWidth;          // restart the shake
+  pinError.style.animation = '';
+  if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+  log(msg);
+}
+function clearPinError(){
+  pinError.textContent = '';
+  pinError.classList.add('hidden');
+}
+clearPinError();
+
 pinSaveBtn.addEventListener('click', () => {
   const val = pinInput.value.trim();
-  if (!val){ log('Enter your bypass PIN first.'); return; }
+  if (!val){ showPinError('Enter your bypass PIN first.'); return; }
   bypassPin = val;
   localStorage.setItem('bypassPin', val);
   pinInput.value = '';
+  pinMode = 'saved';
+  clearPinError();
   renderPinUi();
   log('PIN saved on this phone.');
 });
 pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') pinSaveBtn.click(); });
+
+// Changing the stored PIN requires proving you know the current one.
 pinChangeBtn.addEventListener('click', () => {
+  pinMode = 'verify';
+  clearPinError();
+  renderPinUi();
+  pinVerifyInput.value = '';
+  pinVerifyInput.focus();
+});
+pinVerifyBtn.addEventListener('click', () => {
+  const val = pinVerifyInput.value.trim();
+  if (val !== bypassPin){
+    showPinError('That is not the current PIN.');
+    pinVerifyInput.value = '';
+    pinVerifyInput.focus();
+    return;
+  }
   bypassPin = '';
   localStorage.removeItem('bypassPin');
+  pinVerifyInput.value = '';
+  pinMode = 'entry';
+  clearPinError();
   renderPinUi();
   pinInput.focus();
+  log('PIN cleared — enter the new one.');
 });
+pinVerifyInput.addEventListener('keydown', e => { if (e.key === 'Enter') pinVerifyBtn.click(); });
+
 renderPinUi();
 
 /* ---------- Log ---------- */
@@ -741,9 +807,10 @@ function handleLine(line){
     // Wrong PIN — forget it so the field comes back for a retry.
     bypassPin = '';
     localStorage.removeItem('bypassPin');
+    pinMode = 'entry';
     renderPinUi();
+    showPinError('Wrong PIN — the micro:bit refused the bypass. Try again.');
     pinInput.focus();
-    log('⚠️ The micro:bit rejected that PIN. Enter it again.');
   } else if (line === 'SILENCED'){
     log('Siren silenced at the sensor');
   } else {
