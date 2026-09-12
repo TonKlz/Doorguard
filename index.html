@@ -165,6 +165,25 @@
   .chip .unit{ font-size:10.5px; color:var(--muted); letter-spacing:0.3px; text-transform:uppercase; }
   .chip:disabled{ opacity:0.4; cursor:not-allowed; }
 
+  .pin-row{ display:flex; gap:8px; margin-bottom:12px; }
+  .pin-row input{
+    flex:1; background:var(--chip); border:1px solid var(--card-edge); border-radius:12px;
+    padding:12px; color:var(--text); font-size:14px; font-family:inherit; letter-spacing:3px;
+  }
+  .pin-row input::placeholder{ color:var(--muted-2); letter-spacing:0; }
+  .pin-row button{
+    background:var(--chip); border:1px solid var(--card-edge); color:var(--text);
+    font-weight:700; border-radius:12px; padding:0 18px; font-size:13.5px;
+  }
+  .pin-row.hidden, .pin-saved.hidden{ display:none; }
+  .pin-saved{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin-bottom:12px; font-size:12.5px; color:var(--muted);
+  }
+  .pin-saved button{
+    background:none; color:var(--accent); font-weight:700; font-size:12.5px; padding:4px;
+  }
+
   .custom-row{ display:flex; gap:8px; }
   .custom-row input{
     flex:1; background:var(--chip); border:1px solid var(--card-edge); border-radius:12px;
@@ -237,6 +256,13 @@
 
   <div class="section">
     <div class="section-label">Allow open temporarily (bypass)</div>
+    <div class="pin-row" id="pinRow">
+      <input type="password" inputmode="numeric" id="pinInput" placeholder="Bypass PIN" maxlength="8" autocomplete="off">
+      <button id="pinSaveBtn">Save</button>
+    </div>
+    <div class="pin-saved" id="pinSaved">
+      <span>PIN saved on this phone</span><button id="pinChangeBtn">Change</button>
+    </div>
     <div class="chip-row">
       <button class="chip" data-mins="30" disabled><span class="num">30</span><span class="unit">min</span></button>
       <button class="chip" data-mins="60" disabled><span class="num">1</span><span class="unit">hour</span></button>
@@ -266,7 +292,7 @@
 <script>
 // Bump this on every change so the log tells us instantly which build is
 // actually loaded — stale caches have masked real fixes more than once.
-const APP_BUILD = 'build 14';
+const APP_BUILD = 'build 15';
 
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 // Verified by reading the characteristics off a real micro:bit: these are
@@ -302,6 +328,11 @@ const cancelBtn = document.getElementById('cancelBtn');
 const zoneName = document.getElementById('zoneName');
 const editZoneBtn = document.getElementById('editZoneBtn');
 const diagBtn = document.getElementById('diagBtn');
+const pinRow = document.getElementById('pinRow');
+const pinInput = document.getElementById('pinInput');
+const pinSaveBtn = document.getElementById('pinSaveBtn');
+const pinSaved = document.getElementById('pinSaved');
+const pinChangeBtn = document.getElementById('pinChangeBtn');
 
 /* ---------- Icons ---------- */
 const ICONS = {
@@ -322,6 +353,35 @@ function commitZoneName(){
 zoneName.addEventListener('blur', commitZoneName);
 zoneName.addEventListener('keydown', e => { if (e.key === 'Enter') commitZoneName(); });
 editZoneBtn.addEventListener('click', () => { zoneName.focus(); zoneName.select(); });
+
+/* ---------- Bypass PIN ----------
+   The PIN is enforced by the micro:bit, not here — this only carries it.
+   It's remembered on this phone so you don't retype it every time; the
+   point is that someone else's phone doesn't know it. */
+let bypassPin = localStorage.getItem('bypassPin') || '';
+
+function renderPinUi(){
+  const have = bypassPin !== '';
+  pinRow.classList.toggle('hidden', have);
+  pinSaved.classList.toggle('hidden', !have);
+}
+pinSaveBtn.addEventListener('click', () => {
+  const val = pinInput.value.trim();
+  if (!val){ log('Enter your bypass PIN first.'); return; }
+  bypassPin = val;
+  localStorage.setItem('bypassPin', val);
+  pinInput.value = '';
+  renderPinUi();
+  log('PIN saved on this phone.');
+});
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') pinSaveBtn.click(); });
+pinChangeBtn.addEventListener('click', () => {
+  bypassPin = '';
+  localStorage.removeItem('bypassPin');
+  renderPinUi();
+  pinInput.focus();
+});
+renderPinUi();
 
 /* ---------- Log ---------- */
 function log(msg){
@@ -677,6 +737,13 @@ function handleLine(line){
     setDoor('open');
   } else if (line === 'DOOR_CLOSED'){
     setDoor('closed');
+  } else if (line === 'BAD_PIN'){
+    // Wrong PIN — forget it so the field comes back for a retry.
+    bypassPin = '';
+    localStorage.removeItem('bypassPin');
+    renderPinUi();
+    pinInput.focus();
+    log('⚠️ The micro:bit rejected that PIN. Enter it again.');
   } else if (line === 'SILENCED'){
     log('Siren silenced at the sensor');
   } else {
@@ -737,10 +804,15 @@ async function sendCommand(text){
 
 function requestStatus(){ sendCommand('STATUS'); }
 
+// Bypass carries the PIN; cancelling never does, so you can always re-arm.
+function bypassCommand(mins){
+  return 'BYPASS:' + mins + (bypassPin ? ':' + bypassPin : '');
+}
+
 chips.forEach(chip => {
   chip.addEventListener('click', async () => {
     const mins = parseInt(chip.dataset.mins, 10);
-    const ok = await sendCommand('BYPASS:' + mins);
+    const ok = await sendCommand(bypassCommand(mins));
     if (ok){
       log('Bypass request sent: ' + mins + ' min');
       if (!notifyAvailable) startCountdown(mins * 60);
@@ -753,7 +825,7 @@ chips.forEach(chip => {
 customBtn.addEventListener('click', async () => {
   const val = parseInt(customMins.value, 10);
   if (!val || val < 1){ log('Enter a valid number of minutes'); return; }
-  const ok = await sendCommand('BYPASS:' + val);
+  const ok = await sendCommand(bypassCommand(val));
   if (ok){
     log('Custom bypass sent: ' + val + ' min');
     if (!notifyAvailable) startCountdown(val * 60);
