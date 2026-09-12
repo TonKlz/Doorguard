@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Cache-Control" content="no-store">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Door &amp; Window Guard</title>
+<style>
+  :root{
+    --bg:#f2f4f7;
+    --card:#ffffff;
+    --card-edge:#e4e7ec;
+    --text:#12151a;
+    --muted:#6b7280;
+    --muted-2:#9aa1ad;
+    --accent:#2563eb;
+    --accent-ink:#ffffff;
+    --armed:#16a34a;
+    --armed-bg:#e9f9ee;
+    --alarm:#dc2626;
+    --alarm-bg:#fdecec;
+    --bypass:#d97706;
+    --bypass-bg:#fef3e0;
+    --idle:#6b7280;
+    --idle-bg:#eef0f3;
+    --chip:#eef1f5;
+    --chip-hi:#e2e6ed;
+    --danger-ghost:#dc2626;
+    --shadow:0 12px 28px -12px rgba(16,24,40,0.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115;
+      --card:#171a20;
+      --card-edge:#262b33;
+      --text:#f2f3f5;
+      --muted:#9aa3af;
+      --muted-2:#6b7280;
+      --accent:#3b82f6;
+      --accent-ink:#0b1220;
+      --armed:#34d399;
+      --armed-bg:#0f2a1d;
+      --alarm:#f87171;
+      --alarm-bg:#3a1414;
+      --bypass:#fbbf24;
+      --bypass-bg:#3a2a0a;
+      --idle:#9aa3af;
+      --idle-bg:#1e2128;
+      --chip:#1e2128;
+      --chip-hi:#262b33;
+      --shadow:0 12px 28px -12px rgba(0,0,0,0.5);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;
+    justify-content:center;
+    padding:20px 14px 48px;
+    min-height:100vh;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .app{ width:100%; max-width:420px; }
+
+  /* ---------- Header ---------- */
+  .header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px; }
+  .header-title{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .zone-row{ display:flex; align-items:center; gap:6px; }
+  #zoneName{
+    font-size:19px; font-weight:700; letter-spacing:-0.2px; background:none; border:none; color:var(--text);
+    padding:2px 0; max-width:230px; font-family:inherit;
+  }
+  #zoneName:focus{ outline:none; border-bottom:1px dashed var(--accent); }
+  .edit-btn{ background:none; padding:4px; color:var(--muted-2); border-radius:6px; display:flex; }
+  .edit-btn svg{ width:15px; height:15px; }
+  .subtitle{ font-size:12px; color:var(--muted); }
+
+  .link-pill{
+    display:flex; align-items:center; gap:6px;
+    padding:6px 10px; border-radius:999px;
+    background:var(--chip); font-size:12px; font-weight:600; color:var(--muted);
+    white-space:nowrap;
+  }
+  .link-dot{ width:7px; height:7px; border-radius:50%; background:var(--muted-2); flex:none; }
+  .link-dot.on{ background:var(--armed); box-shadow:0 0 0 3px var(--armed-bg); }
+  .link-dot.off{ background:var(--alarm); box-shadow:0 0 0 3px var(--alarm-bg); }
+
+  /* ---------- Hero status card ---------- */
+  .hero{
+    background:var(--card);
+    border:1px solid var(--card-edge);
+    border-radius:20px;
+    box-shadow:var(--shadow);
+    padding:22px 20px;
+    margin-bottom:14px;
+    text-align:center;
+    transition:background 0.2s ease;
+  }
+  .hero-icon{
+    width:64px; height:64px; margin:0 auto 12px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--idle-bg); color:var(--idle);
+    transition:background 0.2s ease, color 0.2s ease;
+  }
+  .hero-icon svg{ width:32px; height:32px; }
+  .hero-icon.armed{ background:var(--armed-bg); color:var(--armed); }
+  .hero-icon.alarm{ background:var(--alarm-bg); color:var(--alarm); animation:pulse 0.9s ease-in-out infinite; }
+  .hero-icon.bypass{ background:var(--bypass-bg); color:var(--bypass); }
+  @keyframes pulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+
+  .hero-status{ font-size:21px; font-weight:800; letter-spacing:-0.2px; margin-bottom:4px; }
+  .hero-status.armed{ color:var(--armed); }
+  .hero-status.alarm{ color:var(--alarm); }
+  .hero-status.bypass{ color:var(--bypass); }
+  .hero-sub{ font-size:13.5px; color:var(--muted); line-height:1.5; }
+  .hero-sub strong{ color:var(--text); font-variant-numeric:tabular-nums; }
+
+  .door-row{
+    display:inline-flex; align-items:center; gap:6px;
+    margin-top:12px; padding:5px 12px; border-radius:999px;
+    background:var(--chip); font-size:12px; font-weight:600; color:var(--muted);
+  }
+  .door-dot{ width:6px; height:6px; border-radius:50%; background:var(--muted-2); }
+  .door-dot.closed{ background:var(--armed); }
+  .door-dot.open{ background:var(--alarm); }
+
+  button{ font-family:inherit; cursor:pointer; border:none; }
+
+  .connect-btn{
+    width:100%; padding:15px; border-radius:14px;
+    background:var(--accent); color:var(--accent-ink);
+    font-weight:700; font-size:15px; letter-spacing:0.1px;
+    margin-bottom:18px;
+    transition:transform 0.08s ease, opacity 0.15s ease, background 0.15s ease;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .connect-btn:active{ transform:scale(0.98); }
+  .connect-btn.connected{ background:var(--chip); color:var(--muted); }
+  .connect-btn:disabled{ opacity:0.55; cursor:not-allowed; }
+
+  .section{
+    background:var(--card); border:1px solid var(--card-edge); border-radius:16px;
+    padding:16px 16px 18px; margin-bottom:12px; box-shadow:var(--shadow);
+  }
+  .section-label{ font-size:12.5px; font-weight:700; color:var(--muted); margin:0 0 12px; letter-spacing:0.1px; }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .chip{
+    flex:1 1 calc(50% - 8px); min-width:80px;
+    background:var(--chip); border:1px solid var(--card-edge); border-radius:12px;
+    padding:13px 8px; text-align:center; color:var(--text);
+    transition:background 0.12s ease, transform 0.08s ease;
+  }
+  .chip:hover{ background:var(--chip-hi); }
+  .chip:active{ transform:scale(0.97); }
+  .chip .num{ font-size:16px; font-weight:700; display:block; }
+  .chip .unit{ font-size:10.5px; color:var(--muted); letter-spacing:0.3px; text-transform:uppercase; }
+  .chip:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .custom-row{ display:flex; gap:8px; }
+  .custom-row input{
+    flex:1; background:var(--chip); border:1px solid var(--card-edge); border-radius:12px;
+    padding:12px; color:var(--text); font-size:14px; font-family:inherit;
+  }
+  .custom-row input::placeholder{ color:var(--muted-2); }
+  .custom-row button{
+    background:var(--bypass); color:#241700; font-weight:700; border-radius:12px; padding:0 20px; font-size:13.5px;
+  }
+  .custom-row button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .cancel-btn{
+    width:100%; padding:13px; border-radius:14px;
+    background:var(--alarm-bg); border:1px solid transparent; color:var(--danger-ghost);
+    font-weight:700; font-size:14px; margin-bottom:12px;
+  }
+  .cancel-btn:disabled{ opacity:0; height:0; padding:0; margin:0; overflow:hidden; }
+
+  .log-toggle{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    background:none; padding:2px 0; color:var(--muted); font-size:12.5px; font-weight:600;
+  }
+  .log-toggle svg{ width:16px; height:16px; transition:transform 0.15s ease; }
+  .log-toggle.open svg{ transform:rotate(180deg); }
+  .log{
+    margin-top:10px; font-size:12.5px; color:var(--muted); max-height:160px; overflow-y:auto;
+    border-top:1px solid var(--card-edge); padding-top:10px; line-height:1.7; display:none;
+  }
+  .log.open{ display:block; }
+  .log-entry{ display:flex; gap:7px; }
+  .log-time{ color:var(--muted-2); flex:none; font-variant-numeric:tabular-nums; }
+
+  .diag-btn{
+    width:100%; margin-top:10px; padding:10px; border-radius:10px;
+    background:var(--chip); border:1px solid var(--card-edge);
+    color:var(--muted); font-size:12.5px; font-weight:600;
+  }
+  .diag-btn:active{ transform:scale(0.99); }
+
+  .footnote{ text-align:center; font-size:11.5px; color:var(--muted-2); margin-top:14px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="header">
+    <div class="header-title">
+      <div class="zone-row">
+        <input id="zoneName" value="Front Door" maxlength="24" aria-label="Sensor name">
+        <button class="edit-btn" id="editZoneBtn" aria-label="Rename sensor" title="Rename">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
+      </div>
+      <div class="subtitle">micro:bit magnetic sensor · <span id="buildTop"></span></div>
+    </div>
+    <div class="link-pill"><span class="link-dot" id="linkDot"></span><span id="linkText">Offline</span></div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-icon" id="heroIcon"></div>
+    <div class="hero-status" id="heroStatus" aria-live="polite">Not connected</div>
+    <div class="hero-sub" id="heroSub">Connect to your micro:bit to start monitoring.</div>
+    <div class="door-row" id="doorRow" style="display:none;">
+      <span class="door-dot" id="doorDot"></span><span id="doorText">Door status unknown</span>
+    </div>
+  </div>
+
+  <button class="connect-btn" id="connectBtn">Connect to micro:bit</button>
+
+  <div class="section">
+    <div class="section-label">Allow open temporarily (bypass)</div>
+    <div class="chip-row">
+      <button class="chip" data-mins="30" disabled><span class="num">30</span><span class="unit">min</span></button>
+      <button class="chip" data-mins="60" disabled><span class="num">1</span><span class="unit">hour</span></button>
+      <button class="chip" data-mins="180" disabled><span class="num">3</span><span class="unit">hours</span></button>
+      <button class="chip" data-mins="480" disabled><span class="num">8</span><span class="unit">hours</span></button>
+    </div>
+    <div class="custom-row">
+      <input type="number" id="customMins" placeholder="Custom minutes" min="1" disabled>
+      <button id="customBtn" disabled>Set</button>
+    </div>
+  </div>
+
+  <button class="cancel-btn" id="cancelBtn" disabled>Cancel bypass — re-arm now</button>
+
+  <div class="section" style="padding-bottom:12px;">
+    <button class="log-toggle" id="logToggle">
+      <span>Activity log</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="log" id="log"></div>
+    <button class="diag-btn" id="diagBtn">Run Bluetooth diagnostics</button>
+  </div>
+
+  <div class="footnote">Requires a micro:bit V2 running the door/window guard firmware.<br>Use Chrome or Edge (Android/desktop), or Bluefy on iOS.<br><span id="buildTag"></span></div>
+</div>
+
+<script>
+// Bump this on every change so the log tells us instantly which build is
+// actually loaded — stale caches have masked real fixes more than once.
+const APP_BUILD = 'build 14';
+
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+// Verified by reading the characteristics off a real micro:bit: these are
+// the OPPOSITE way round from the usual Nordic UART convention, because the
+// micro:bit names them from its own point of view.
+//   6e400002 -> [indicate]            micro:bit sends to us
+//   6e400003 -> [write, writeNoResp]  we send to the micro:bit
+const UART_TX      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // micro:bit -> app
+const UART_RX      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // app -> micro:bit
+
+let rxChar = null;
+let device = null;
+let busy = false;   // guards against overlapping connect / diagnostics runs
+let countdownTimer = null;
+let bypassEndsAt = null;
+let notifyAvailable = true;
+
+const connectBtn = document.getElementById('connectBtn');
+const linkDot = document.getElementById('linkDot');
+const linkText = document.getElementById('linkText');
+const heroIcon = document.getElementById('heroIcon');
+const heroStatus = document.getElementById('heroStatus');
+const heroSub = document.getElementById('heroSub');
+const doorRow = document.getElementById('doorRow');
+const doorDot = document.getElementById('doorDot');
+const doorText = document.getElementById('doorText');
+const logEl = document.getElementById('log');
+const logToggle = document.getElementById('logToggle');
+const chips = document.querySelectorAll('.chip');
+const customMins = document.getElementById('customMins');
+const customBtn = document.getElementById('customBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const zoneName = document.getElementById('zoneName');
+const editZoneBtn = document.getElementById('editZoneBtn');
+const diagBtn = document.getElementById('diagBtn');
+
+/* ---------- Icons ---------- */
+const ICONS = {
+  idle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.3 6.3a9 9 0 1 0 12.6 12.6M3 3l18 18"/><path d="M12 8v4l3 2" opacity="0"/></svg>',
+  armed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5Z"/><path d="m9 12 2 2 4-4"/></svg>',
+  alarm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5Z"/><path d="M12 8v5M12 16h.01"/></svg>',
+  bypass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg>'
+};
+
+/* ---------- Zone name ---------- */
+zoneName.value = localStorage.getItem('zoneName') || 'Front Door';
+function commitZoneName(){
+  const val = zoneName.value.trim() || 'Sensor';
+  zoneName.value = val;
+  localStorage.setItem('zoneName', val);
+  zoneName.blur();
+}
+zoneName.addEventListener('blur', commitZoneName);
+zoneName.addEventListener('keydown', e => { if (e.key === 'Enter') commitZoneName(); });
+editZoneBtn.addEventListener('click', () => { zoneName.focus(); zoneName.select(); });
+
+/* ---------- Log ---------- */
+function log(msg){
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const row = document.createElement('div');
+  row.className = 'log-entry';
+  row.innerHTML = `<span class="log-time">${t}</span><span>${msg}</span>`;
+  logEl.prepend(row);
+  while (logEl.children.length > 60) logEl.removeChild(logEl.lastChild);
+}
+logToggle.addEventListener('click', () => {
+  logToggle.classList.toggle('open');
+  logEl.classList.toggle('open');
+});
+
+function setControlsEnabled(enabled){
+  chips.forEach(k => k.disabled = !enabled);
+  customMins.disabled = !enabled;
+  customBtn.disabled = !enabled;
+  cancelBtn.disabled = !enabled || !bypassEndsAt;
+}
+
+/* ---------- Hero status ---------- */
+function setStatus(kind, statusText, subText){
+  heroIcon.className = 'hero-icon' + (kind ? ' ' + kind : '');
+  heroIcon.innerHTML = ICONS[kind || 'idle'];
+  heroStatus.className = 'hero-status' + (kind ? ' ' + kind : '');
+  heroStatus.textContent = statusText;
+  heroSub.innerHTML = subText || '';
+}
+
+function setDoor(state){
+  // state: 'open' | 'closed' | null (unknown)
+  if (state === null){ doorRow.style.display = 'none'; return; }
+  doorRow.style.display = 'inline-flex';
+  doorDot.className = 'door-dot ' + state;
+  doorText.textContent = state === 'open' ? (zoneName.value + ' is open') : (zoneName.value + ' is closed');
+}
+
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+/* ---------- UART auto-negotiation ----------
+   Which characteristic is "listen" and which is "write" differs between
+   what the micro:bit spec says and what some browsers report, and at least
+   one browser reports properties that contradict themselves. So don't trust
+   any of it: try each combination, send STATUS, and keep whichever one
+   actually brings data back. */
+async function negotiateUart(service){
+  let chars = [];
+  try{
+    chars = await service.getCharacteristics();
+  }catch(e){
+    log('Could not list UART characteristics: ' + e.name);
+    return false;
+  }
+  log('UART service has ' + chars.length + ' characteristics.');
+
+  const orderings = [];
+  for (const listen of chars){
+    for (const writeTo of chars){
+      if (listen !== writeTo) orderings.push([listen, writeTo]);
+    }
+  }
+
+  for (const [listen, writeTo] of orderings){
+    const pair = listen.uuid.slice(0, 8) + ' ← listen / ' + writeTo.uuid.slice(0, 8) + ' → write';
+    try{
+      gotData = false;
+      await listen.startNotifications();
+      listen.addEventListener('characteristicvaluechanged', onData);
+
+      const bytes = new TextEncoder().encode('STATUS\n');
+      try{
+        if (typeof writeTo.writeValueWithoutResponse === 'function'){
+          await writeTo.writeValueWithoutResponse(bytes);
+        } else {
+          await writeTo.writeValue(bytes);
+        }
+      }catch(e){
+        log('Tried ' + pair + ' — write rejected (' + e.name + ')');
+      }
+
+      await wait(1500);
+      if (gotData){
+        rxChar = writeTo;
+        log('✓ UART wiring found — ' + pair);
+        return true;
+      }
+
+      log('Tried ' + pair + ' — no reply.');
+      listen.removeEventListener('characteristicvaluechanged', onData);
+      try{ await listen.stopNotifications(); }catch(e){}
+    }catch(e){
+      log('Tried ' + pair + ' — subscribe failed (' + e.name + ')');
+    }
+  }
+
+  // Nothing answered. Fall back to whichever characteristic claims it can be
+  // written to, so bypass at least has a chance of getting through.
+  rxChar = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || chars[0] || null;
+  log('⚠️ No combination replied to STATUS. Either the micro:bit is not running the guard firmware, or it is not answering. Sending blind on ' + (rxChar ? rxChar.uuid.slice(0, 8) : 'nothing') + '.');
+  return false;
+}
+
+/* ---------- Connect ---------- */
+async function connect(){
+  if (busy){ log('Already working on a connection — ignoring that tap.'); return; }
+  busy = true;
+  let step = 'requestDevice';
+  notifyAvailable = true;
+  unlockAudio();
+  ensureNotificationPermission();
+  try{
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting…';
+
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'BBC micro:bit' }],
+      optionalServices: [UART_SERVICE]
+    });
+    log('Device selected: ' + (device.name || 'unnamed'));
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    let service = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 4 && !service; attempt++){
+      try{
+        step = 'gatt.connect (attempt ' + attempt + ')';
+        const server = await device.gatt.connect();
+        await wait(300);
+        step = 'getPrimaryService (UART service)';
+        service = await server.getPrimaryService(UART_SERVICE);
+      }catch(e){
+        lastErr = e;
+        log('Connect attempt ' + attempt + ' failed: ' + e.name + ' — ' + e.message);
+        try{ if (device.gatt.connected) device.gatt.disconnect(); }catch(x){}
+        await wait(700);
+      }
+    }
+    if (!service) throw lastErr;
+
+    step = 'negotiating UART characteristics';
+    // Negotiation can take a few seconds. Say so, rather than leaving the
+    // panel reading "Not connected" as if nothing had happened.
+    linkText.textContent = 'Linking…';
+    linkDot.className = 'link-dot on';
+    setStatus(null, 'Linking…', 'Working out how to talk to the micro:bit. This takes a few seconds.');
+    notifyAvailable = await negotiateUart(service);
+
+    linkText.textContent = notifyAvailable ? 'Connected' : 'Connected (send-only)';
+    linkDot.className = 'link-dot on';
+    connectBtn.textContent = 'Disconnect';
+    connectBtn.classList.add('connected');
+    connectBtn.disabled = false;
+    setControlsEnabled(true);
+    holdScreenAwake();
+    log('Connected to ' + (device.name || 'micro:bit'));
+    if (notifyAvailable){
+      // Don't leave the panel reading "Not connected" while we wait.
+      setStatus(null, 'Connected', 'Waiting for status from the micro:bit…');
+      requestStatus();
+    } else {
+      // Never claim "Armed" when the board hasn't answered — that implies
+      // protection we cannot actually confirm.
+      setStatus(null, 'No reply from micro:bit',
+        'Connected over Bluetooth, but the board isn\'t responding. Check it is powered on and running the guard firmware — it beeps once at startup.');
+      setDoor(null);
+    }
+  }catch(err){
+    log('Failed at "' + step + '": ' + err.name + ' — ' + err.message);
+    if (err.name === 'NetworkError'){
+      log('↳ A micro:bit accepts only ONE Bluetooth connection at a time. Check for: another tab of this app still connected (Chrome shows a Bluetooth icon on that tab), a MakeCode tab holding the board, or a stale connection from a tab you closed. Power-cycle the micro:bit and try again with only this tab open.');
+    }
+    try{ if (device && device.gatt && device.gatt.connected) device.gatt.disconnect(); }catch(e){}
+    connectBtn.textContent = 'Connect to micro:bit';
+    connectBtn.disabled = false;
+  }finally{
+    busy = false;
+  }
+}
+
+// Release the board when this tab goes away, otherwise the micro:bit can
+// keep believing it's still connected and refuse the next tab.
+window.addEventListener('pagehide', () => {
+  try{ if (device && device.gatt && device.gatt.connected) device.gatt.disconnect(); }catch(e){}
+});
+
+function onDisconnected(){
+  linkText.textContent = 'Offline';
+  linkDot.className = 'link-dot off';
+  connectBtn.textContent = 'Connect to micro:bit';
+  connectBtn.classList.remove('connected');
+  connectBtn.disabled = false;
+  setControlsEnabled(false);
+  setStatus(null, 'Not connected', 'Connect to your micro:bit to start monitoring.');
+  setDoor(null);
+  clearInterval(countdownTimer);
+  stopPhoneAlert();
+  releaseScreen();
+  bypassEndsAt = null;
+  log('Disconnected');
+}
+
+connectBtn.addEventListener('click', () => {
+  if (device && device.gatt.connected){
+    device.gatt.disconnect();
+  } else {
+    connect();
+  }
+});
+
+/* ---------- Incoming data ---------- */
+const decoder = new TextDecoder();
+let buffer = '';
+let gotData = false;   // set by the first inbound bytes, used by negotiateUart
+function onData(event){
+  const chunk = decoder.decode(event.target.value);
+  gotData = true;
+  buffer += chunk;
+  let idx;
+  while ((idx = buffer.indexOf('\n')) >= 0){
+    const line = buffer.slice(0, idx).trim();
+    buffer = buffer.slice(idx + 1);
+    if (line) handleLine(line);
+  }
+}
+
+/* ---------- Local alerts ---------- */
+let audioCtx = null;
+function unlockAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playAlarmBeep(){
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  [0, 0.3, 0.6].forEach((offset) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.2;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.2);
+  });
+}
+async function ensureNotificationPermission(){
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  try{ return (await Notification.requestPermission()) === 'granted'; }catch(e){ return false; }
+}
+async function showAlarmNotification(){
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const title = zoneName.value + ' opened';
+  const opts = {
+    body: 'The ' + zoneName.value.toLowerCase() + ' has been opened.',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: 'door-alarm',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200]
+  };
+  // Android Chrome does NOT support `new Notification()` — it throws, and
+  // notifications must go through the service worker registration instead.
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg && reg.showNotification){
+      await reg.showNotification(title, opts);
+      return;
+    }
+  }catch(e){}
+  try{ new Notification(title, opts); }catch(e){
+    log('Could not show a notification: ' + e.name);
+  }
+}
+
+/* ---------- Keep the page alive ----------
+   The micro:bit's speaker is off, so this phone is the only thing that
+   will alert you. A backgrounded tab can have its Bluetooth suspended, so
+   hold a screen wake lock for as long as we're connected. Not supported
+   everywhere — failing is fine, it just means don't let the screen sleep. */
+let wakeLock = null;
+async function holdScreenAwake(){
+  try{
+    if ('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      log('Screen will stay awake while connected.');
+    }
+  }catch(e){
+    log('Could not keep the screen awake (' + e.name + ') — keep the app open and the screen on.');
+  }
+}
+function releaseScreen(){
+  try{ if (wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+// A wake lock is dropped when the tab is hidden; take it again on return.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && device && device.gatt && device.gatt.connected && !wakeLock){
+    holdScreenAwake();
+  }
+});
+
+// Keep nagging until the door closes or the alarm is cleared — a single
+// beep is easy to sleep through.
+let alarmPulse = null;
+function triggerPhoneAlert(){
+  showAlarmNotification();
+  const pulse = () => {
+    playAlarmBeep();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  };
+  pulse();
+  clearInterval(alarmPulse);
+  alarmPulse = setInterval(pulse, 2500);
+}
+function stopPhoneAlert(){
+  clearInterval(alarmPulse);
+  alarmPulse = null;
+}
+
+/* ---------- Protocol ---------- */
+function handleLine(line){
+  if (line === 'ALARM_TRIGGERED'){
+    setStatus('alarm', 'Alarm', zoneName.value + ' was opened while armed.');
+    clearInterval(countdownTimer);
+    bypassEndsAt = null;
+    cancelBtn.disabled = true;
+    log('⚠️ Alarm triggered');
+    triggerPhoneAlert();
+  } else if (line.startsWith('BYPASS_ACTIVE:')){
+    const secs = parseInt(line.split(':')[1], 10);
+    startCountdown(secs);
+    log('Bypass active — ' + Math.round(secs/60) + ' min remaining');
+  } else if (line.startsWith('BYPASSED:')){
+    const mins = line.split(':')[1];
+    log('Bypass set for ' + mins + ' min');
+  } else if (line === 'ARMED'){
+    setStatus('armed', 'Armed', 'Watching ' + zoneName.value.toLowerCase() + ' for movement.');
+    clearInterval(countdownTimer);
+    bypassEndsAt = null;
+    cancelBtn.disabled = true;
+    stopPhoneAlert();
+  } else if (line === 'SETUP'){
+    setStatus(null, 'Setup needed', 'The sensor isn\'t calibrated yet. With the door closed and the magnet in place, press <strong>button A</strong> on the micro:bit.');
+    setDoor(null);
+    clearInterval(countdownTimer);
+    bypassEndsAt = null;
+    cancelBtn.disabled = true;
+  } else if (line === 'DOOR_OPEN'){
+    setDoor('open');
+  } else if (line === 'DOOR_CLOSED'){
+    setDoor('closed');
+  } else if (line === 'SILENCED'){
+    log('Siren silenced at the sensor');
+  } else {
+    log('Received: ' + line);
+  }
+}
+
+function startCountdown(totalSecs){
+  clearInterval(countdownTimer);
+  stopPhoneAlert();
+  bypassEndsAt = Date.now() + totalSecs * 1000;
+  cancelBtn.disabled = false;
+  tickCountdown();
+  countdownTimer = setInterval(tickCountdown, 1000);
+}
+
+function tickCountdown(){
+  const remaining = Math.max(0, Math.round((bypassEndsAt - Date.now()) / 1000));
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
+  const parts = [];
+  if (h) parts.push(String(h).padStart(2,'0'));
+  parts.push(String(m).padStart(2,'0'));
+  parts.push(String(s).padStart(2,'0'));
+  setStatus('bypass', 'Bypassed', 'Opening allowed. Re-arms in <strong>' + parts.join(':') + '</strong>.');
+  if (remaining <= 0){
+    clearInterval(countdownTimer);
+    bypassEndsAt = null;
+    cancelBtn.disabled = true;
+    setStatus('armed', 'Armed', 'Watching ' + zoneName.value.toLowerCase() + ' for movement.');
+  }
+}
+
+async function sendCommand(text){
+  if (!rxChar){
+    log('Cannot send "' + text + '" — not connected');
+    return false;
+  }
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(text + '\n');
+  if (typeof rxChar.writeValueWithoutResponse === 'function'){
+    try{
+      await rxChar.writeValueWithoutResponse(bytes);
+      return true;
+    }catch(err){
+      log('Send failed for "' + text + '": ' + err.name + ' — ' + err.message);
+    }
+  }
+  try{
+    await rxChar.writeValue(bytes);
+    return true;
+  }catch(err){
+    log('Send failed for "' + text + '": ' + err.name + ' — ' + err.message);
+    return false;
+  }
+}
+
+function requestStatus(){ sendCommand('STATUS'); }
+
+chips.forEach(chip => {
+  chip.addEventListener('click', async () => {
+    const mins = parseInt(chip.dataset.mins, 10);
+    const ok = await sendCommand('BYPASS:' + mins);
+    if (ok){
+      log('Bypass request sent: ' + mins + ' min');
+      if (!notifyAvailable) startCountdown(mins * 60);
+    } else {
+      log('Bypass request did not reach the micro:bit');
+    }
+  });
+});
+
+customBtn.addEventListener('click', async () => {
+  const val = parseInt(customMins.value, 10);
+  if (!val || val < 1){ log('Enter a valid number of minutes'); return; }
+  const ok = await sendCommand('BYPASS:' + val);
+  if (ok){
+    log('Custom bypass sent: ' + val + ' min');
+    if (!notifyAvailable) startCountdown(val * 60);
+  } else {
+    log('Custom bypass did not reach the micro:bit');
+  }
+  customMins.value = '';
+});
+
+cancelBtn.addEventListener('click', async () => {
+  const ok = await sendCommand('BYPASS:0');
+  if (ok){
+    log('Cancel confirmed — re-arming');
+    if (!notifyAvailable){
+      clearInterval(countdownTimer);
+      bypassEndsAt = null;
+      cancelBtn.disabled = true;
+      setStatus('armed', 'Armed', 'Watching ' + zoneName.value.toLowerCase() + ' for movement.');
+    }
+  } else {
+    log('Cancel request did not reach the micro:bit');
+  }
+});
+
+/* ---------- Diagnostics ----------
+   Dumps what the micro:bit is ACTUALLY exposing, rather than what we
+   assume it exposes. Answers: does the UART service exist, do the
+   characteristics exist, and do they really support notify/write. */
+const KNOWN_SERVICES = [
+  UART_SERVICE,
+  'e95d0753-251d-470a-a062-fa1922dfa9a8', // accelerometer
+  'e95d9882-251d-470a-a062-fa1922dfa9a8', // buttons
+  'e95dd91d-251d-470a-a062-fa1922dfa9a8', // led
+  'e95d6100-251d-470a-a062-fa1922dfa9a8', // temperature
+  'e95d93af-251d-470a-a062-fa1922dfa9a8', // event
+  '0000180a-0000-1000-8000-00805f9b34fb'  // device information
+];
+
+function propsOf(c){
+  const p = c.properties, f = [];
+  if (p.read) f.push('read');
+  if (p.write) f.push('write');
+  if (p.writeWithoutResponse) f.push('writeNoResp');
+  if (p.notify) f.push('NOTIFY');
+  if (p.indicate) f.push('indicate');
+  return f.length ? f.join(', ') : '(none)';
+}
+
+async function runDiagnostics(){
+  if (busy){ log('Already working on a connection — wait for it to finish.'); return; }
+  busy = true;
+  try{ await runDiagnosticsInner(); }finally{ busy = false; }
+}
+
+async function runDiagnosticsInner(){
+  logToggle.classList.add('open');
+  logEl.classList.add('open');
+  log('──────── DIAGNOSTICS ────────');
+  log('Browser: ' + navigator.userAgent);
+
+  if (!navigator.bluetooth){ log('✗ navigator.bluetooth missing'); return; }
+
+  try{
+    let dev = (device && device.gatt && device.gatt.connected) ? device : null;
+    if (dev){
+      log('Reusing the existing connection.');
+    } else {
+      dev = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'BBC micro:bit' }],
+        optionalServices: KNOWN_SERVICES
+      });
+      log('Device: ' + (dev.name || 'unnamed'));
+      await dev.gatt.connect();
+      log('✓ GATT connected');
+      await wait(400);
+    }
+
+    let services = [];
+    try{
+      services = await dev.gatt.getPrimaryServices();
+      log('Services visible: ' + services.length);
+    }catch(e){
+      log('getPrimaryServices failed: ' + e.name + ' — ' + e.message);
+    }
+
+    for (const s of services){
+      log('▸ SERVICE ' + s.uuid);
+      try{
+        const chars = await s.getCharacteristics();
+        for (const c of chars){
+          log('    ' + c.uuid + '  [' + propsOf(c) + ']');
+        }
+      }catch(e){
+        log('    (could not read characteristics: ' + e.name + ')');
+      }
+    }
+
+    // Focused check on the two we actually depend on.
+    try{
+      const svc = await dev.gatt.getPrimaryService(UART_SERVICE);
+      log('✓ UART service present');
+      try{
+        const rx = await svc.getCharacteristic(UART_RX);
+        log('✓ WRITE char (app→board) ' + rx.uuid.slice(0, 8) + ' [' + propsOf(rx) + ']');
+      }catch(e){ log('✗ write char ' + UART_RX.slice(0, 8) + ' missing: ' + e.name); }
+      try{
+        const tx = await svc.getCharacteristic(UART_TX);
+        log('✓ LISTEN char (board→app) ' + tx.uuid.slice(0, 8) + ' [' + propsOf(tx) + ']');
+        try{
+          await tx.startNotifications();
+          log('✓ startNotifications SUCCEEDED');
+          await tx.stopNotifications();
+        }catch(e){
+          log('✗ startNotifications failed: ' + e.name + ' — ' + e.message);
+        }
+      }catch(e){ log('✗ listen char ' + UART_TX.slice(0, 8) + ' missing: ' + e.name); }
+    }catch(e){
+      log('✗ UART service NOT found: ' + e.name + ' — is the Bluetooth extension added and startUartService() called?');
+    }
+
+    log('──────── END ────────');
+  }catch(err){
+    log('Diagnostics aborted: ' + err.name + ' — ' + err.message);
+    if (err.name === 'NetworkError'){
+      log('↳ Could not connect at all, so nothing could be inspected. Something else is holding the board: another tab of this app, a MakeCode tab, or a stale connection. Power-cycle the micro:bit, close every other tab, and run this again.');
+    }
+  }
+}
+
+diagBtn.addEventListener('click', runDiagnostics);
+
+if (!navigator.bluetooth){
+  log('Web Bluetooth is not available in this browser. Use Chrome/Edge, or Bluefy on iOS.');
+  connectBtn.disabled = true;
+  connectBtn.textContent = 'Bluetooth not supported';
+}
+
+document.getElementById('buildTag').textContent = APP_BUILD;
+document.getElementById('buildTop').textContent = APP_BUILD;
+log('App ' + APP_BUILD);
+
+/* ---------- No service worker, on purpose ----------
+   Offline caching bought nothing here (the app is useless without a live
+   Bluetooth link) and repeatedly served stale code that made real fixes
+   look like they had failed. This actively removes any service worker and
+   cache left over from earlier versions, so the browser can never serve an
+   old build again. */
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => { regs.forEach(r => r.unregister()); if (regs.length) log('Removed ' + regs.length + ' old service worker(s).'); })
+    .catch(() => {});
+}
+if (window.caches){
+  caches.keys()
+    .then(keys => { keys.forEach(k => caches.delete(k)); if (keys.length) log('Cleared ' + keys.length + ' old cache(s).'); })
+    .catch(() => {});
+}
+</script>
+</body>
+</html>
